@@ -59,16 +59,23 @@ app.get('/', async (req, res) => {
     <th scope="col">Reviewers</th>
     </tr>
     </thead><tbody>`)
-    data.forEach((patch) => {
-      processPatch(patch)
-    })
-    res.write(formatPatchData())
+    res.write(getReport(data))
     res.write('</tbody></table>')
     // res.write('</ul>')
     res.write(getHtmlFoot())
     res.end()
   })
 })
+
+function getReport(data) {
+  if (!cache.has('reportData')) {
+    data.forEach((patch) => {
+      processPatch(patch)
+    })
+    cache.set('reportData', formatPatchData())
+  }
+  return(cache.get('reportData'))
+}
 
 app.listen(port, () => {
   console.log(`App listening at port ${port}`)
@@ -191,7 +198,6 @@ async function getAndSaveOpenData(forceRefresh = false) {
       getGerritData('is:open').then((data) => {
         fs.writeFileSync(config.dataDir, JSON.stringify(data))
         cache.set(`openData`, data)
-        reviewData = { cr0: [], cr1: [], cr2: [] }
         resolve(data)
       })
     } else {
