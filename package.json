@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "debug": "set DEBUG=*,-nodemon*,-express* && nodemon --ignore data index.js",
+    "run": "node --ignore data index.js"
   },
   "author": "John D. Lewis <31732476+jolewis-ddn@users.noreply.github.com>",
   "license": "MIT",

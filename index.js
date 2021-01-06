@@ -43,8 +43,11 @@ let reviewData = { cr0: [], cr1: [], cr2: [] }
 
 app.get('/', async (req, res) => {
   getAndSaveOpenData().then((data) => {
+    const report = getReport(data)
+
     res.writeHead(200, { 'Content-Type': 'text/html' })
     res.write(getHtmlHead())
+    res.write(`<em>Data cached at: ${cache.get('reportDate')}`)
     // res.write('<ul class="list-group">')
     res.write(`<table class="table">
     <thead>
@@ -59,7 +62,7 @@ app.get('/', async (req, res) => {
     <th scope="col">Reviewers</th>
     </tr>
     </thead><tbody>`)
-    res.write(getReport(data))
+    res.write(report)
     res.write('</tbody></table>')
     // res.write('</ul>')
     res.write(getHtmlFoot())
@@ -74,6 +77,7 @@ function getReport(data) {
       processPatch(patch)
     })
     cache.set('reportData', formatPatchData())
+    cache.set('reportDate', new Date())
   }
   return(cache.get('reportData'))
 }
