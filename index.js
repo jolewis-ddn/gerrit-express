@@ -69,6 +69,7 @@ app.get('/', async (req, res) => {
 
 function getReport(data) {
   if (!cache.has('reportData')) {
+    reviewData = { cr0: [], cr1: [], cr2: [] }
     data.forEach((patch) => {
       processPatch(patch)
     })
