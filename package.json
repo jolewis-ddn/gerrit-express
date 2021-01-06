@@ -1,0 +1,17 @@
+{
+  "name": "gerrit-express",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "John D. Lewis <31732476+jolewis-ddn@users.noreply.github.com>",
+  "license": "MIT",
+  "dependencies": {
+    "config": "^3.3.3",
+    "express": "^4.17.1",
+    "node-cache": "^5.1.2",
+    "node-fetch": "^2.6.1"
+  }
+}

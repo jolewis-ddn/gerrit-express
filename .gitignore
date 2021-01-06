@@ -1,0 +1,6 @@
+config/default.json
+
+node_modules
+*.sqlite
+data/*.json
+
