@@ -83,7 +83,7 @@ app.listen(port, () => {
 })
 
 function formatPatchData() {
-  return(reviewData.cr1.concat(reviewData.cr0, reviewData.cr2).join(''))
+  return(reviewData.cr2.concat(reviewData.cr1, reviewData.cr0).join(''))
 }
 
 function getVScore(patch) {
