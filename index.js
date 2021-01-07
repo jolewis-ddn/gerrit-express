@@ -9,7 +9,7 @@ const cache = new NodeCache({ stdTTL: 600, checkperiod: 120 })
 const express = require('express')
 const { Promise } = require('node-fetch')
 const app = express()
-const port = 9400
+const port = config.has('port') ? config.get('port') : 3000
 
 function getHtmlHead(title = "Gerrit Report") {
   return(`<!doctype html>
