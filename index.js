@@ -142,11 +142,11 @@ function convertCRScoreToIndex(score) {
   }
 }
 
-/* Data Structure:
+/* Data Structure (n.b. X is unknown/invalid)
   Ver:
-   0: cr-2, cr-1, cr0, cr1, cr2, crX (where X is unknown/invalid)
-  +1: cr-2, cr-1, cr0, cr1, cr2, crX
-  -1: cr-2, cr-1, cr0, cr1, cr2, crX
+  +1:      cr-2, cr-1, cr0, cr1, cr2, crX
+   0:      cr-2, cr-1, cr0, cr1, cr2, crX
+  -1:      cr-2, cr-1, cr0, cr1, cr2, crX
   Invalid: cr-2, cr-1, cr0, cr1, cr2, crX
  */
 
