@@ -1,3 +1,5 @@
+const path = require('path')
+
 const fetch = require('node-fetch')
 const debug = require('debug')('index')
 const fs = require('fs')
@@ -46,7 +48,9 @@ function getHtmlHead(title = 'Gerrit Report', printLegend = true) {
     </style>
     </head>
     <body>
-    ${printLegend ? `<table class="sticky-top start-100" style="border-color:white; border-style:solid;" border=3>
+    ${
+      printLegend
+        ? `<table class="sticky-top start-100" style="border-color:white; border-style:solid;" border=3>
     <tr>
     <th class="bg-light">Legend: </th>
     <td class='legendCell VerifiedWith2'>V+1/CR+2</td>
@@ -57,7 +61,9 @@ function getHtmlHead(title = 'Gerrit Report', printLegend = true) {
     <td class='legendCell WIP'>WIP</td>
     <td class='legendCell NotVerified'>Not&nbsp;Ver</td>
     </tr>
-    </table>` : ``}
+    </table>`
+        : ``
+    }
     <h1>${title}</h1>
     `
 }
@@ -104,10 +110,10 @@ function convertVIndexToScore(index) {
     case 1:
       return 0
     case 2:
-      return "+1"
+      return '+1'
     case 3:
     default:
-      return "?"
+      return '?'
   }
 }
 
@@ -147,12 +153,12 @@ function convertCRIndexToScore(index) {
     case 2:
       return 0
     case 3:
-      return "+1"
+      return '+1'
     case 4:
-      return "+2"
+      return '+2'
     case 5:
     default:
-      return "?"
+      return '?'
   }
 }
 
@@ -482,8 +488,36 @@ async function getAndSaveOpenData(forceRefresh = false) {
   return new Promise(async (resolve, reject) => {
     if (!cache.has(`openData`) || forceRefresh) {
       debug('fetching data: forceRefresh: ', forceRefresh)
-      getGerritData('is:open').then((data) => {
-        fs.writeFileSync(config.dataDir, JSON.stringify(data))
+      getGerritData(config.openQuery).then((data) => {
+        if (!fs.existsSync(config.dataDir)) {
+          fs.mkdirSync(config.dataDir)
+        }
+
+        fs.writeFileSync(
+          config.dataDir + path.sep + config.dataFileName + config.dataFileExt,
+          JSON.stringify(data)
+        )
+        if (config.has('saveHistory') && config.saveHistory) {
+          let historyDir = config.has('historyDir')
+            ? config.historyDir
+            : config.dataDir
+
+            if (!fs.existsSync(historyDir)) {
+              fs.mkdirSync(historyDir)
+            }
+
+          debug(`...saving archive file to ${historyDir}`)
+
+          fs.writeFileSync(
+            historyDir +
+              path.sep +
+              config.dataFileName +
+              '-' +
+              Date.now() +
+              config.dataFileExt,
+            JSON.stringify(data)
+          )
+        }
         cache.set(`openData`, data)
         resolve(data)
       })
@@ -561,10 +595,12 @@ app.get('/stats', async (req, res) => {
     // Print stats table
     res.write(`<table class="table"><thead>
     <tr><th></th>`)
-    Array(reviewData.nonWip[0].length).fill(0).forEach((y, cri) => {
-      debug(`convertCRIndexToScore(${cri}) about to be called...`)
-      res.write(`<th scope="col">CR ${convertCRIndexToScore(cri)}</th>`)
-    })
+    Array(reviewData.nonWip[0].length)
+      .fill(0)
+      .forEach((y, cri) => {
+        debug(`convertCRIndexToScore(${cri}) about to be called...`)
+        res.write(`<th scope="col">CR ${convertCRIndexToScore(cri)}</th>`)
+      })
     res.write(`</tr></thead><tbody><tr>`)
     Array(reviewData.nonWip.length)
       .fill(0)

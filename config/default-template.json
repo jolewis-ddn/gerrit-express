@@ -1,7 +1,12 @@
 {
     "gerritUrlBase": "https://gerrit.hostname.com:8000",
+    "openQuery": "is:open",
     "gerritUrlSuffix": "&o=DETAILED_LABELS&o=CURRENT_COMMIT&o=ALL_REVISIONS&o=DETAILED_ACCOUNTS&o=REVIEWED",
-    "gerritUrlPrefix": "/changes/?q=",
-    "dataDir": "data/Open.json",
-    "port": 3000
+    "dataDir": "data",
+    "dataFileName": "Open",
+    "dataFileExt": ".json",
+    "port": 3000,
+    
+    "saveHistory": true,
+    "historyDir": "data-archive"
 }
