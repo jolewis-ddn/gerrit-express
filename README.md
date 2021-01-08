@@ -58,7 +58,7 @@ Available endpoints (update the port to match your config file's `port` value):
 
 ## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/your/project/tags). 
+We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/jolewis-ddn/gerrit-express/tags). 
 
 ## Authors
 
