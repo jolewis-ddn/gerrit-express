@@ -20,7 +20,7 @@ const NO_DATA = -999 // Indicates that data is missing or invalid
  * @param {string} [title="Gerrit Report"] Page title
  * @returns {string} HTML
  */
-function getHtmlHead(title = 'Gerrit Report') {
+function getHtmlHead(title = 'Gerrit Report', printLegend = true) {
   return `<!doctype html>
   <html lang="en">
     <head>
@@ -46,7 +46,7 @@ function getHtmlHead(title = 'Gerrit Report') {
     </style>
     </head>
     <body>
-    <table class="sticky-top start-100" style="border-color:white; border-style:solid;" border=3>
+    ${printLegend ? `<table class="sticky-top start-100" style="border-color:white; border-style:solid;" border=3>
     <tr>
     <th class="bg-light">Legend: </th>
     <td class='legendCell VerifiedWith2'>V+1/CR+2</td>
@@ -57,7 +57,7 @@ function getHtmlHead(title = 'Gerrit Report') {
     <td class='legendCell WIP'>WIP</td>
     <td class='legendCell NotVerified'>Not&nbsp;Ver</td>
     </tr>
-    </table>
+    </table>` : ``}
     <h1>${title}</h1>
     `
 }
@@ -92,6 +92,26 @@ function pushRow(vScore, crScore, row, isWip = false) {
 }
 
 /**
+ * Return CR score based on array index in reviewData object
+ *
+ * @param {number} index Index of corresponding data
+ * @returns {string|number} Number or string from Gerrit
+ */
+function convertVIndexToScore(index) {
+  switch (index) {
+    case 0:
+      return -1
+    case 1:
+      return 0
+    case 2:
+      return "+1"
+    case 3:
+    default:
+      return "?"
+  }
+}
+
+/**
  * Index in reviewData object for specified Verified score value
  *
  * @param {number} score Number or string from Gerrit
@@ -107,10 +127,32 @@ function convertVScoreToIndex(score) {
     case '+1':
       return 2
     default:
-      debug(
-        `convertVScoreToIndex(${score})... unrecognized VScore value!`
-      )
+      debug(`convertVScoreToIndex(${score})... unrecognized VScore value!`)
       return 3
+  }
+}
+
+/**
+ * Return CR score based on array index in reviewData object
+ *
+ * @param {number} index Index of corresponding data
+ * @returns {string|number} Number or string from Gerrit
+ */
+function convertCRIndexToScore(index) {
+  switch (index) {
+    case 0:
+      return -2
+    case 1:
+      return -1
+    case 2:
+      return 0
+    case 3:
+      return "+1"
+    case 4:
+      return "+2"
+    case 5:
+    default:
+      return "?"
   }
 }
 
@@ -135,9 +177,7 @@ function convertCRScoreToIndex(score) {
     case '+2':
       return 4
     default:
-      debug(
-        `convertCRScoreToIndex(${score})... unrecognized CR score value!`
-      )
+      debug(`convertCRScoreToIndex(${score})... unrecognized CR score value!`)
       return 5
   }
 }
@@ -167,6 +207,19 @@ function resetReviewData() {
   }
 }
 
+function processData(data) {
+  if (data && !cache.has('reportData')) {
+    reviewData = resetReviewData()
+    data.forEach((patch) => {
+      processPatch(patch)
+    })
+    cache.set('reportData', formatPatchData())
+    cache.set('reportDate', new Date())
+    cache.set('reviewData', reviewData)
+  }
+  return cache.has('reportData')
+}
+
 /**
  * Return the (cached) report data,
  * rebuilding if necessary (e.g. cache has expired or first run)
@@ -177,12 +230,9 @@ function resetReviewData() {
  */
 function getReport(data) {
   if (data && !cache.has('reportData')) {
-    reviewData = resetReviewData()
-    data.forEach((patch) => {
-      processPatch(patch)
-    })
-    cache.set('reportData', formatPatchData())
-    cache.set('reportDate', new Date())
+    if (!processData(data)) {
+      console.error(`getReport(data) failed...`)
+    }
   }
   return cache.get('reportData')
 }
@@ -209,7 +259,25 @@ function formatPatchData() {
       reviewData.nonWip[convertVScoreToIndex(-1)][convertCRScoreToIndex(1)],
       reviewData.nonWip[convertVScoreToIndex(-1)][convertCRScoreToIndex(0)],
       reviewData.nonWip[convertVScoreToIndex(-1)][convertCRScoreToIndex(-1)],
-      reviewData.nonWip[convertVScoreToIndex(-1)][convertCRScoreToIndex(-2)]
+      reviewData.nonWip[convertVScoreToIndex(-1)][convertCRScoreToIndex(-2)],
+      reviewData.nonWip[convertVScoreToIndex(NO_DATA)][
+        convertCRScoreToIndex(2)
+      ],
+      reviewData.nonWip[convertVScoreToIndex(NO_DATA)][
+        convertCRScoreToIndex(1)
+      ],
+      reviewData.nonWip[convertVScoreToIndex(NO_DATA)][
+        convertCRScoreToIndex(0)
+      ],
+      reviewData.nonWip[convertVScoreToIndex(NO_DATA)][
+        convertCRScoreToIndex(-1)
+      ],
+      reviewData.nonWip[convertVScoreToIndex(NO_DATA)][
+        convertCRScoreToIndex(-2)
+      ],
+      reviewData.nonWip[convertVScoreToIndex(NO_DATA)][
+        convertCRScoreToIndex(NO_DATA)
+      ]
     )
     .join('')
 }
@@ -479,6 +547,40 @@ app.get('/', async (req, res) => {
       </thead><tbody>`)
     res.write(report)
     res.write('</tbody></table>')
+    res.write(getHtmlFoot())
+    res.end()
+  })
+})
+
+app.get('/stats', async (req, res) => {
+  getAndSaveOpenData().then((data) => {
+    const report = getReport(data)
+    res.writeHead(200, { 'Content-Type': 'text/html' })
+    res.write(getHtmlHead('Stats', false))
+    res.write(`<h2>Distribution</h2><em>Ignoring WIP</em>`)
+    // Print stats table
+    res.write(`<table class="table"><thead>
+    <tr><th></th>`)
+    Array(reviewData.nonWip[0].length).fill(0).forEach((y, cri) => {
+      debug(`convertCRIndexToScore(${cri}) about to be called...`)
+      res.write(`<th scope="col">CR ${convertCRIndexToScore(cri)}</th>`)
+    })
+    res.write(`</tr></thead><tbody><tr>`)
+    Array(reviewData.nonWip.length)
+      .fill(0)
+      .forEach((x, vi) => {
+        res.write(`<th scope="row">V ${convertVIndexToScore(vi)}</th>`)
+        Array(reviewData.nonWip[0].length)
+          .fill(0)
+          .forEach((y, cri) => {
+            res.write(
+              `<td><!-- v: ${vi}; cr: ${cri} -->${reviewData.nonWip[vi][cri].length}</td>`
+            )
+          })
+        res.write(`</tr>`)
+      })
+    res.write('</tbody></table>')
+    res.write(`<h2>WIP</h2>${reviewData.wip.length} WIP patches`)
     res.write(getHtmlFoot())
     res.end()
   })
