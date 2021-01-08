@@ -1,0 +1,7 @@
+{
+    "gerritUrlBase": "https://gerrit.hostname.com:8000",
+    "gerritUrlSuffix": "&o=DETAILED_LABELS&o=CURRENT_COMMIT&o=ALL_REVISIONS&o=DETAILED_ACCOUNTS&o=REVIEWED",
+    "gerritUrlPrefix": "/changes/?q=",
+    "dataDir": "data/Open.json",
+    "port": 3000
+}

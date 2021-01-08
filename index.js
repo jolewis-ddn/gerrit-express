@@ -1,20 +1,27 @@
 const fetch = require('node-fetch')
-// const sqlite3 = require('sqlite3')
 const debug = require('debug')('index')
 const fs = require('fs')
 const config = require('config')
+
 const NodeCache = require('node-cache')
 const cache = new NodeCache({ stdTTL: 600, checkperiod: 120 })
 
 const express = require('express')
 const { Promise } = require('node-fetch')
+
 const app = express()
-const port = config.has('port') ? config.get('port') : 3000
+const port = config.has('port') ? config.get('port') : 3000 // HTTP port
 
-const NO_DATA = -999
+const NO_DATA = -999 // Indicates that data is missing or invalid
 
-function getHtmlHead(title = "Gerrit Report") {
-  return(`<!doctype html>
+/**
+ * Return the HTML footer, including Bootstrap CSS & custom styles
+ *
+ * @param {string} [title="Gerrit Report"] Page title
+ * @returns {string} HTML
+ */
+function getHtmlHead(title = 'Gerrit Report') {
+  return `<!doctype html>
   <html lang="en">
     <head>
       <!-- Required meta tags -->
@@ -52,109 +59,124 @@ function getHtmlHead(title = "Gerrit Report") {
     </tr>
     </table>
     <h1>${title}</h1>
-    `)
+    `
 }
 
+/**
+ * Return the HTML footer, including Bootstrap JS
+ *
+ * @returns {string} HTML
+ */
 function getHtmlFoot() {
-  return(`<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/js/bootstrap.bundle.min.js" integrity="sha384-ygbV9kiqUc6oa4msXn9868pTtWMgiQaeYH7/t7LECLbyPA2x65Kgf80OJFdroafW" crossorigin="anonymous"></script></body></html>`)
+  return `<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/js/bootstrap.bundle.min.js" integrity="sha384-ygbV9kiqUc6oa4msXn9868pTtWMgiQaeYH7/t7LECLbyPA2x65Kgf80OJFdroafW" crossorigin="anonymous"></script></body></html>`
 }
 
 let reviewData = resetReviewData()
 
-app.get('/', async (req, res) => {
-  getAndSaveOpenData().then((data) => {
-    const report = getReport(data)
-
-    res.writeHead(200, { 'Content-Type': 'text/html' })
-    res.write(getHtmlHead())
-    res.write(`<em>Data cached at: ${cache.get('reportDate')}`)
-    // res.write('<ul class="list-group">')
-    res.write(`<table class="table">
-      <thead>
-      <tr>
-      <th scope="col">#</th>
-      <th scope="col">V</th>
-      <th scope="col">CR</th>
-      <th scope="col">Subject</th>
-      <th scope="col">Owner</th>
-      <th scope="col">Project</th>
-      <!-- th scope="col"># Reviewers</th -->
-      <th scope="col">Reviewers</th>
-      </tr>
-      </thead><tbody>`)
-    res.write(report)
-    res.write('</tbody></table>')
-    // res.write('</ul>')
-    res.write(getHtmlFoot())
-    res.end()
-  })
-})
-
+/**
+ * Append data to the reviewData object
+ *
+ * @param {number} vScore Verified score
+ * @param {number} crScore Code Review score
+ * @param {string} row HTML content
+ * @param {boolean} [isWip=false] If work_in_progress=true
+ */
 function pushRow(vScore, crScore, row, isWip = false) {
-  debug(`pushRow(${vScore}, ${crScore}, row, ${isWip}) called...`)
   if (isWip) {
     reviewData.wip.push(row)
   } else {
-    debug(`reviewData.nonWip[${convertVScoreToIndex(vScore)}][${convertCRScoreToIndex(crScore)}].push(row)`)
-    reviewData.nonWip[convertVScoreToIndex(vScore)][convertCRScoreToIndex(crScore)].push(row)
+    reviewData.nonWip[convertVScoreToIndex(vScore)][
+      convertCRScoreToIndex(crScore)
+    ].push(row)
   }
 }
 
+/**
+ * Index in reviewData object for specified Verified score value
+ *
+ * @param {number} score Number or string from Gerrit
+ * @returns {number} Index of corresponding data
+ */
 function convertVScoreToIndex(score) {
   switch (score) {
     case -1:
-      return(0)
+      return 0
     case 0:
-      return(1)
+      return 1
     case 1:
-    case "+1":
-      return(2)
+    case '+1':
+      return 2
     default:
-      debug(`convertVScoreToIndex(${score})... unrecognized VScore value!`)
-      return(3)
+      debug(
+        `convertVScoreToIndex(${score})... unrecognized VScore value!`
+      )
+      return 3
   }
 }
 
+/**
+ * Index in reviewData object for specified Verified score value
+ *
+ * @param {number} score Number or string from Gerrit
+ * @returns {number} Index of corresponding data
+ */
 function convertCRScoreToIndex(score) {
   switch (score) {
     case -2:
-      return(0)
+      return 0
     case -1:
-      return(1)
+      return 1
     case 0:
-      return(2)
+      return 2
     case 1:
-    case "+1":
-      return(3)
+    case '+1':
+      return 3
     case 2:
-    case "+2":
-      return(4)
+    case '+2':
+      return 4
     default:
-      debug(`convertCRScoreToIndex(${score})... unrecognized CR score value!`)
-      return(5)
+      debug(
+        `convertCRScoreToIndex(${score})... unrecognized CR score value!`
+      )
+      return 5
   }
 }
 
-/* Ver:
+/* Data Structure:
+  Ver:
    0: cr-2, cr-1, cr0, cr1, cr2, crX (where X is unknown/invalid)
   +1: cr-2, cr-1, cr0, cr1, cr2, crX
   -1: cr-2, cr-1, cr0, cr1, cr2, crX
   Invalid: cr-2, cr-1, cr0, cr1, cr2, crX
  */
 
+/**
+ * Empty reviewData structure
+ *
+ * @returns {object} Properly formatted data structure
+ */
 function resetReviewData() {
-  return({ wip: [],
-        nonWip: [
-          [ [], [], [], [], [], [] ], // 0
-          [ [], [], [], [], [], [] ], // +1
-          [ [], [], [], [], [], [] ],  // -1
-          [ [], [], [], [], [], [] ]  // Invalid
-        ]
-      })
+  return {
+    wip: [],
+    nonWip: [
+      [[], [], [], [], [], []], // -1
+      [[], [], [], [], [], []], // 0
+      [[], [], [], [], [], []], // +1
+      [[], [], [], [], [], []], // Invalid
+    ],
+  }
 }
 
+/**
+ * Return the (cached) report data,
+ * rebuilding if necessary (e.g. cache has expired or first run)
+ * using the supplied data from Gerrit
+ *
+ * @param {string} data Source data from Gerrit
+ * @returns {string} HTML for output
+ */
 function getReport(data) {
-  if (!cache.has('reportData')) {
+  if (data && !cache.has('reportData')) {
     reviewData = resetReviewData()
     data.forEach((patch) => {
       processPatch(patch)
@@ -162,17 +184,17 @@ function getReport(data) {
     cache.set('reportData', formatPatchData())
     cache.set('reportDate', new Date())
   }
-  return(cache.get('reportData'))
+  return cache.get('reportData')
 }
 
-app.listen(port, () => {
-  console.log(`App listening at port ${port}`)
-})
-
+/**
+ * Create string of HTML from reviewData
+ *
+ * @returns {string} HTML string
+ */
 function formatPatchData() {
-  // debug(reviewData)
-  return(
-    reviewData.nonWip[convertVScoreToIndex(+1)][convertCRScoreToIndex(2)].concat(
+  return reviewData.nonWip[convertVScoreToIndex(+1)][convertCRScoreToIndex(2)]
+    .concat(
       reviewData.nonWip[convertVScoreToIndex(+1)][convertCRScoreToIndex(1)],
       reviewData.nonWip[convertVScoreToIndex(+1)][convertCRScoreToIndex(0)],
       reviewData.nonWip[convertVScoreToIndex(+1)][convertCRScoreToIndex(-1)],
@@ -188,175 +210,206 @@ function formatPatchData() {
       reviewData.nonWip[convertVScoreToIndex(-1)][convertCRScoreToIndex(0)],
       reviewData.nonWip[convertVScoreToIndex(-1)][convertCRScoreToIndex(-1)],
       reviewData.nonWip[convertVScoreToIndex(-1)][convertCRScoreToIndex(-2)]
-    ).join('')
-  )
-  // return(reviewData.cr2.concat(
-  //         reviewData.cr1, 
-  //         reviewData.cr0, 
-  //         reviewData.crNeg1, 
-  //         reviewData.crNeg2, 
-  //         reviewData.wip, 
-  //         // reviewData.ver0, 
-  //         reviewData.ver0cr2, 
-  //         reviewData.ver0cr1, 
-  //         reviewData.ver0cr0, 
-  //         reviewData.verNeg1
-  //       ).join(''))
+    )
+    .join('')
 }
 
+/**
+ * Calculate the summary Verified score for the supplied patch
+ *
+ * @param {object} patch JSON patch data from Gerrit
+ * @returns {string|number} Value - return "+1" if Max is 1, otherwise Min
+ */
 function getVScore(patch) {
   let vScore = NO_DATA
   if (patch.labels.Verified && patch.labels.Verified.all) {
-    // vScore = patch.labels.Verified.all.filter((x) => x.name == 'jenkins')
-    vScore = patch.labels.Verified.all
-      .map((x) => x.value ? x.value : 0)
-    
+    vScore = patch.labels.Verified.all.map((x) => (x.value ? x.value : 0))
+
     vScoresMax = vScore.reduce((max, cur) => Math.max(max, cur))
     vScoresMin = vScore.reduce((min, cur) => Math.min(min, cur))
-    
-    if (patch._number == "5029") {
-      debug(`5029: `, vScore, vScoresMax, vScoresMin)
-    }
 
-    if (vScoresMax == 1) { 
-      vScore = "+1"
-    // } else if (typeof vScore == "object" && vScore[0] == [ -1 ]) {
+    if (vScoresMax == 1) {
+      vScore = '+1'
     } else if (vScoresMin == -1) {
-      return(-1)
+      return -1
     } else {
-      return(0)
+      return 0
     }
   }
-  return(vScore)
+  return vScore
 }
 
+/**
+ * Calculate the summary CR score for the supplied patch
+ *
+ * @param {object} patch JSON patch data from Gerrit
+ * @returns {string|number} Value - return Max if no negative values,
+ *                           otherwise return Min
+ */
 function getCRScore(patch) {
   let crScore = NO_DATA
   if (patch.labels['Code-Review'] && patch.labels['Code-Review'].all) {
-    crScores = patch.labels['Code-Review'].all.map(el => el.value)
+    crScores = patch.labels['Code-Review'].all.map((el) => el.value)
+
     crScoresMax = crScores.reduce((max, cur) => Math.max(max, cur))
     crScoresMin = crScores.reduce((min, cur) => Math.min(min, cur))
+
     if (crScoresMax == 2 && crScoresMin == 0) {
-      crScore = "+2"
+      crScore = '+2'
     } else if (crScoresMax == 1 && crScoresMin == 0) {
-      crScore = "+1"
+      crScore = '+1'
     } else {
       crScore = crScoresMin
     }
   }
-  return(crScore)
+  return crScore
 }
 
+/**
+ * Determine the right CSS class for the supplied patch
+ * Based on work_in_progress, Verified score, and Code-Review score
+ * (or 'NoVerificationData' on invalid/missing data)
+ *
+ * @param {object} patch JSON patch data from Gerrit
+ * @returns {string} CSS class name
+ */
 function getClass(patch) {
-  // debug(`getClass(${patch._number}) called...`)
   if (patch.work_in_progress) {
-    return('WIP')
+    return 'WIP'
   } else {
     const vScore = getVScore(patch)
-    // debug(typeof vScore, vScore)
     switch (vScore) {
-      case "+1":
-        // Check if reviewed with +1
+      case '+1':
         const crScore = getCRScore(patch)
         if (crScore == 2) {
-          return('VerifiedWith2')
-        } else if (crScore == "+1") {
-          return('VerifiedWith1')
+          return 'VerifiedWith2'
+        } else if (crScore == '+1') {
+          return 'VerifiedWith1'
         } else if (crScore == 0) {
-          return('VerifiedWith0')
+          return 'VerifiedWith0'
         } else if (crScore == -1) {
-          return('VerifiedWithNeg1')
+          return 'VerifiedWithNeg1'
         } else if (crScore == -2) {
-          return('VerifiedWithNeg2')
+          return 'VerifiedWithNeg2'
         } else {
           debug(`invalid crScore of ${crScore} for ${patch._number}`)
-          return('INVALID')
+          return 'INVALID'
         }
       case -1:
-        return('NotVerified Verified-1')
+        return 'NotVerified Verified-1'
       case -2:
-        return('NotVerified Verified-2')
+        return 'NotVerified Verified-2'
       case 0:
-        return('NotVerified')
+        return 'NotVerified'
       case NO_DATA:
-        return('NoVerificationData')
+        return 'NoVerificationData'
       default:
-        debug(`getClass(${patch._number}): vScore (${vScore}) not recognized...`)
-        return('NoVerificationData')
+        console.error(
+          `getClass(${patch._number}): vScore (${vScore}) not recognized...`
+        )
+        return 'NoVerificationData'
     }
   }
 }
 
+/**
+ * Build the HTML content for the supplied patch
+ *
+ * @param {object} patch JSON patch data from Gerrit
+ * @returns {boolean} True on success
+ */
 function processPatch(patch) {
   const vScore = getVScore(patch)
   const crScore = getCRScore(patch)
-  let resp = ``
   const patchClass = getClass(patch)
   const reviewers = getCodeReviewers(patch)
 
-  resp += `<tr class='${patchClass}'>
-  <td><a href='${config.gerritUrlBase}/${patch._number}' target='_blank'>${patch._number}</a></td>
-  <td>${vScore == NO_DATA ? "?" : vScore}</td>
-  <td>${crScore == NO_DATA ? "?" : crScore}</td>
-  <td>${patch.subject}</td>
-  <td>${patch.owner.name}</td>
-  <td>${patch.project}</td>
-  <!-- td>${reviewers.length}</td -->
-  <td>
-  `
-  if (crScore < 2) {
-    // resp += `<ul class='list-group'><li class='list-group-item ${patchClass}'>Reviewers: ${getCodeReviewers(patch).join('; ')}</li></ul>`
-    resp += reviewers.join(';').replaceAll(' ', '&nbsp;').replaceAll(');', '); ')
-  }
-  resp += `</td></tr>`
-  
-  pushRow(vScore, crScore, resp, patch.work_in_progress)
-  // if (patch.work_in_progress) {
-  //   reviewData.wip.push(resp)
-  // } else {
-  //   if (vScore == "+1") {
-  //     switch (crScore) {
-  //       case 1:
-  //       case "+1":
-  //         reviewData.cr1.push(resp)
-  //         break;
-  //       case 0:
-  //         reviewData.cr0.push(resp)
-  //         break;
-  //       case 2:
-  //         reviewData.cr2.push(resp)
-  //         break;
-  //       case -1:
-  //         reviewData.crNeg1.push(resp)
-  //         break;
-  //       case -2:
-  //         reviewData.crNeg2.push(resp)
-  //         break;
-  //       default:
-  //         debug(`invalid crScore: ${crScore} for ${patch._number}`)
-  //         break;
-  //     }
-  //   } else if (vScore == 0) { // not verified
-  //     reviewData.ver0.push(resp)
-  //   } else if (vScore == -1) { // not verified
-  //     reviewData.verNeg1.push(resp)
-  //   }
-  // }
-  return(true)
+  // HTML table row containing the content for display
+
+  pushRow(
+    vScore,
+    crScore,
+    buildRowHtml(
+      patch._number,
+      vScore,
+      crScore,
+      patchClass,
+      reviewers,
+      patch.subject,
+      patch.owner.name,
+      patch.project
+    ),
+    patch.work_in_progress
+  )
+  return true
 }
 
+/**
+ * Create the HTML table row string from the patch data
+ *
+ * @param {number} patchNumber Patch number
+ * @param {string|number} vScore Verified score
+ * @param {string|number} crScore Code-Review score
+ * @param {string} patchClass CSS class name
+ * @param {string} reviewers List of reviewers (HTML)
+ * @param {string} subject Subject
+ * @param {string} owner Owner name
+ * @param {string} project Project name
+ * @returns {string} HTML TR
+ */
+function buildRowHtml(
+  patchNumber,
+  vScore,
+  crScore,
+  patchClass,
+  reviewers,
+  subject,
+  owner,
+  project
+) {
+  let reviewerCell =
+    crScore < 2
+      ? // If the patch doesn't have a Code Review +2 yet, add the reviewers
+        reviewers.join(';').replaceAll(' ', '&nbsp;').replaceAll(');', '); ')
+      : ''
+
+  return `<tr class='${patchClass}'>
+  <td><a href='${
+    config.gerritUrlBase
+  }/${patchNumber}' target='_blank'>${patchNumber}</a></td>
+  <td>${vScore == NO_DATA ? '?' : vScore}</td>
+  <td>${crScore == NO_DATA ? '?' : crScore}</td>
+  <td>${subject}</td>
+  <td>${owner}</td>
+  <td>${project}</td>
+  <td>${reviewerCell}</td>
+  </tr>`
+}
+
+/**
+ * Get a list of reviewers from the Gerrit data for the supplied patch
+ *
+ * @param {*} patch JSON object from Gerrit with full patch data
+ * @returns {array} List of reviewers' names (excluding Jenkins)
+ */
 function getCodeReviewers(patch) {
   const reviewers = []
   if (patch.labels['Code-Review'] && patch.labels['Code-Review'].all) {
     patch.labels['Code-Review'].all.forEach((r) => {
       if (r.name !== 'jenkins') {
-        reviewers.push(r.name + "(" + (r.value == "1" ? "+1" : r.value) + ")")
+        reviewers.push(r.name + '(' + (r.value == '1' ? '+1' : r.value) + ')')
       }
     })
   }
-  return(reviewers)
+  return reviewers
 }
 
+/**
+ * Fetch the Gerrit data or return the cached data
+ *
+ * @param {boolean} [forceRefresh=false] Require a new data load
+ * @returns {string} JSON data from Gerrit (cached)
+ */
 async function getAndSaveOpenData(forceRefresh = false) {
   return new Promise(async (resolve, reject) => {
     if (!cache.has(`openData`) || forceRefresh) {
@@ -373,9 +426,18 @@ async function getAndSaveOpenData(forceRefresh = false) {
   })
 }
 
+/**
+ * Fetch the raw data from Gerrit
+ *
+ * @param {string} query Gerrit query string (e.g. 'is:open')
+ * @returns {string} Cleaned JSON
+ */
 async function getGerritData(query) {
   const response = await fetch(
-    config.gerritUrlBase + config.gerritUrlPrefix + query + config.gerritUrlSuffix
+    config.gerritUrlBase +
+      config.gerritUrlPrefix +
+      query +
+      config.gerritUrlSuffix
   )
   const txt = await response.text()
   return cleanJson(txt)
@@ -395,3 +457,33 @@ function cleanJson(rawData) {
   }
   return JSON.parse(rawData)
 }
+
+app.get('/', async (req, res) => {
+  getAndSaveOpenData().then((data) => {
+    const report = getReport(data)
+
+    res.writeHead(200, { 'Content-Type': 'text/html' })
+    res.write(getHtmlHead())
+    res.write(`<em>Data cached at: ${cache.get('reportDate')}`)
+    res.write(`<table class="table">
+      <thead>
+      <tr>
+      <th scope="col">#</th>
+      <th scope="col">V</th>
+      <th scope="col">CR</th>
+      <th scope="col">Subject</th>
+      <th scope="col">Owner</th>
+      <th scope="col">Project</th>
+      <th scope="col">Reviewers</th>
+      </tr>
+      </thead><tbody>`)
+    res.write(report)
+    res.write('</tbody></table>')
+    res.write(getHtmlFoot())
+    res.end()
+  })
+})
+
+app.listen(port, () => {
+  console.log(`App listening at port ${port}`)
+})
