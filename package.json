@@ -11,6 +11,7 @@
   "author": "John D. Lewis <31732476+jolewis-ddn@users.noreply.github.com>",
   "license": "MIT",
   "dependencies": {
+    "@slack/webhook": "^5.0.4",
     "config": "^3.3.3",
     "express": "^4.17.1",
     "node-cache": "^5.1.2",

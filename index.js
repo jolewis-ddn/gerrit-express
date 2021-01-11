@@ -5,6 +5,12 @@ const debug = require('debug')('index')
 const fs = require('fs')
 const config = require('config')
 
+let webhook = false
+if (config.has('slackWebhookUrl')) {
+  const { IncomingWebhook } = require('@slack/webhook')
+  webhook = new IncomingWebhook(config.slackWebhookUrl)
+}
+
 const NodeCache = require('node-cache')
 const cache = new NodeCache({ stdTTL: 600, checkperiod: 120 })
 
@@ -234,13 +240,38 @@ function processData(data) {
  * @param {string} data Source data from Gerrit
  * @returns {string} HTML for output
  */
-function getReport(data) {
-  if (data && !cache.has('reportData')) {
-    if (!processData(data)) {
-      console.error(`getReport(data) failed...`)
+async function getReport(data) {
+  return new Promise(async (resolve, reject) => {
+    if (data && !cache.has('reportData')) {
+      if (!processData(data)) {
+        console.error(`getReport(data) failed...`)
+      } else {
+        // Send Slack message?
+        if (config.has('slackWebhookUrl')) {
+          let header = `\n\` V CR> -2 | -1 |  0 | +1 | +2 |  ? |\``
+          let slackMsg = [header]
+          Array(reviewData.nonWip.length)
+            .fill(0)
+            .forEach((x, vi) => {
+              let viScore = convertVIndexToScore(vi)
+              if (viScore == 0 || viScore == '?') { viScore = ` ${viScore}`}
+              let msg = `${viScore} -->`
+              Array(reviewData.nonWip[0].length)
+                .fill(0)
+                .forEach((y, cri) => {
+                  let len = reviewData.nonWip[vi][cri].length
+                  if (len < 10) { len = ' ' + len }
+                  msg += ` ${len} |`
+                })
+                slackMsg.push(`\`${msg}\``)
+            })
+          slackMsg.push(`...${reviewData.wip.length} WIP patches`)
+          await webhook.send({ type: "mrkdwn", text: `*getAndSaveOpenData* @ ${cache.get('reportDate')}: ${slackMsg.join(`\n`)}` })
+        }
+      }
     }
-  }
-  return cache.get('reportData')
+    resolve(cache.get('reportData'))
+  })
 }
 
 /**
@@ -561,8 +592,8 @@ function cleanJson(rawData) {
 }
 
 app.get('/', async (req, res) => {
-  getAndSaveOpenData().then((data) => {
-    const report = getReport(data)
+  getAndSaveOpenData().then(async (data) => {
+    const report = await getReport(data)
 
     res.writeHead(200, { 'Content-Type': 'text/html' })
     res.write(getHtmlHead())
@@ -587,8 +618,8 @@ app.get('/', async (req, res) => {
 })
 
 app.get('/stats', async (req, res) => {
-  getAndSaveOpenData().then((data) => {
-    const report = getReport(data)
+  getAndSaveOpenData().then(async (data) => {
+    const report = await getReport(data)
     res.writeHead(200, { 'Content-Type': 'text/html' })
     res.write(getHtmlHead('Stats', false))
     res.write(`<h2>Distribution</h2><em>Ignoring WIP</em>`)
