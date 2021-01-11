@@ -265,7 +265,7 @@ async function getReport(data) {
                 })
                 slackMsg.push(`\`${msg}\``)
             })
-          slackMsg.push(`...${reviewData.wip.length} WIP patches`)
+          slackMsg.push(`... not counting ${reviewData.wip.length} WIP patches`)
           await webhook.send({ type: "mrkdwn", text: `*getAndSaveOpenData* @ ${cache.get('reportDate')}: ${slackMsg.join(`\n`)}` })
         }
       }
