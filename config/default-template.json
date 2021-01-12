@@ -8,5 +8,9 @@
     "port": 3000,
     
     "saveHistory": true,
-    "historyDir": "data-archive"
+    "historyDir": "data-archive",
+    "slack": {
+        "enabled": false,
+        "slackWebhookUrl": "https://hooks.slack.com/ENTER_PARAMETERS_HERE"
+    }
 }

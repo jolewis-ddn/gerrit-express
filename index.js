@@ -6,9 +6,10 @@ const fs = require('fs')
 const config = require('config')
 
 let webhook = false
-if (config.has('slackWebhookUrl')) {
+
+if (isSlackConfigured()) {
   const { IncomingWebhook } = require('@slack/webhook')
-  webhook = new IncomingWebhook(config.slackWebhookUrl)
+  webhook = new IncomingWebhook(config.slack.webhookUrl)
 }
 
 const NodeCache = require('node-cache')
@@ -232,6 +233,15 @@ function processData(data) {
   return cache.has('reportData')
 }
 
+function isSlackConfigured() {
+  return (
+    config.has('slack') &&
+    config.has('slack.enabled') &&
+    config.slack.enabled &&
+    config.has('slack.webhookUrl')
+  )
+}
+
 /**
  * Return the (cached) report data,
  * rebuilding if necessary (e.g. cache has expired or first run)
@@ -240,33 +250,42 @@ function processData(data) {
  * @param {string} data Source data from Gerrit
  * @returns {string} HTML for output
  */
-async function getReport(data) {
+async function getReport(data, showSlack = false) {
   return new Promise(async (resolve, reject) => {
     if (data && !cache.has('reportData')) {
       if (!processData(data)) {
         console.error(`getReport(data) failed...`)
       } else {
         // Send Slack message?
-        if (config.has('slackWebhookUrl')) {
+        if (showSlack && isSlackConfigured()) {
           let header = `\n\` V CR> -2 | -1 |  0 | +1 | +2 |  ? |\``
           let slackMsg = [header]
           Array(reviewData.nonWip.length)
             .fill(0)
             .forEach((x, vi) => {
               let viScore = convertVIndexToScore(vi)
-              if (viScore == 0 || viScore == '?') { viScore = ` ${viScore}`}
+              if (viScore == 0 || viScore == '?') {
+                viScore = ` ${viScore}`
+              }
               let msg = `${viScore} -->`
               Array(reviewData.nonWip[0].length)
                 .fill(0)
                 .forEach((y, cri) => {
                   let len = reviewData.nonWip[vi][cri].length
-                  if (len < 10) { len = ' ' + len }
+                  if (len < 10) {
+                    len = ' ' + len
+                  }
                   msg += ` ${len} |`
                 })
-                slackMsg.push(`\`${msg}\``)
+              slackMsg.push(`\`${msg}\``)
             })
           slackMsg.push(`... not counting ${reviewData.wip.length} WIP patches`)
-          await webhook.send({ type: "mrkdwn", text: `*getAndSaveOpenData* @ ${cache.get('reportDate')}: ${slackMsg.join(`\n`)}` })
+          await webhook.send({
+            type: 'mrkdwn',
+            text: `*getAndSaveOpenData* @ ${cache.get(
+              'reportDate'
+            )}: ${slackMsg.join(`\n`)}`,
+          })
         }
       }
     }
@@ -533,9 +552,9 @@ async function getAndSaveOpenData(forceRefresh = false) {
             ? config.historyDir
             : config.dataDir
 
-            if (!fs.existsSync(historyDir)) {
-              fs.mkdirSync(historyDir)
-            }
+          if (!fs.existsSync(historyDir)) {
+            fs.mkdirSync(historyDir)
+          }
 
           debug(`...saving archive file to ${historyDir}`)
 
@@ -592,8 +611,10 @@ function cleanJson(rawData) {
 }
 
 app.get('/', async (req, res) => {
+  const slack = req.query.slack && req.query.slack == 'yes' ? true : false
+  debug(`slack: ${slack}`)
   getAndSaveOpenData().then(async (data) => {
-    const report = await getReport(data)
+    const report = await getReport(data, slack)
 
     res.writeHead(200, { 'Content-Type': 'text/html' })
     res.write(getHtmlHead())

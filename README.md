@@ -30,7 +30,7 @@ Install required Node modules
 npm i
 ```
 
-Set the config file (`saveHistory` and `historyDir` are the only optional settings)
+Set the config file (`saveHistory` and `historyDir` are the only optional settings). (See the config file options, below.)
 
 ```
 cp config/default-template.json config/default.json
@@ -47,6 +47,23 @@ Available endpoints (update the port to match your config file's `port` value):
 
 1. `http://localhost:3000/`
 1. `http://localhost:3000/stats`
+
+## Configuration
+### Required Configuration Parameters
+* **gerritUrlBase**: Gerrit URL (protocol, hostname, and (optional) port) - e.g. "https://gerrit.hostname.com:8000"
+* **openQuery**: Gerrit string for query - e.g. "is:open"
+* **gerritUrlSuffix**: Gerrit closing string - e.g. "&o=DETAILED_LABELS&o=CURRENT_COMMIT&o=ALL_REVISIONS&o=DETAILED_ACCOUNTS&o=REVIEWED"
+* **dataDir**: Directory to store the output files - e.g. "data"
+* **dataFileName**: Filename for the output file - e.g. "Open"
+* **dataFileExt**: Extension for teh output file - e.g. ".json"
+* **port**: Port for this application - e.g. 3000
+
+### *Optional* Configuration Parameters
+* **saveHistory**: Should history be saved - e.g. true
+* **historyDir**: Directory to store the history files - e.g. "data-archive"
+* **slack**: Slack-specific sub-section
+  * **slack.enabled**: Turn on Slack messages - e.g. false
+  * **slack.slackWebhookUrl**: Webook for Slack - e.g. "https://hooks.slack.com/ENTER_PARAMETERS_HERE"
 
 ## Built With
 
