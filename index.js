@@ -618,7 +618,6 @@ app.get('/', async (req, res) => {
 
     res.writeHead(200, { 'Content-Type': 'text/html' })
     res.write(getHtmlHead())
-    res.write(`<em>Data cached at: ${cache.get('reportDate')}`)
     res.write(`<table class="table">
       <thead>
       <tr>
@@ -633,6 +632,7 @@ app.get('/', async (req, res) => {
       </thead><tbody>`)
     res.write(report)
     res.write('</tbody></table>')
+    res.write(`<em>Data cached at: ${cache.get('reportDate')} (Expires in ${((cache.getTtl('reportDate') - new Date().getTime())/(1000*60)).toFixed(2)} minutes)`)
     res.write(getHtmlFoot())
     res.end()
   })
